@@ -6,6 +6,7 @@ classdef Scene < handle
     properties
         points = []     % [...; x y z id; ...] (Nx4)
         planes = []     % [...; tl tr br bl id; ...] (Nx[4*3+1])
+        spheres = []    % [...; center radius id; ...] (Nx5)
         
         F           % elements in the scene are defined w.r.t this frame
     end
@@ -44,7 +45,7 @@ classdef Scene < handle
         end
         
         function addPlane(scene, ptTL, ptTR, ptBR, ptBL)
-            %ADDPLANE Add a ScenePlane to the scene
+            %ADDPLANE Add a plane to the scene
             
             % Offset the points and then express in the world frame
             pts = [ptTL; ptTR; ptBR; ptBL] + scene.offset;
@@ -59,6 +60,22 @@ classdef Scene < handle
             scene.next_id = scene.next_id + 1;
             
             scene.planes = [scene.planes; plane];
+        end
+        
+        function addSphere(scene, center, radius)
+            %ADDSPHERE Add a sphere to the scene
+            
+            % Add in offset to center
+            center = center + scene.offset;
+            center = reshape(center, 1, 3);
+            
+            % Augment with plane's id
+            sphere = [center radius scene.next_id];
+            
+            % Update next_id
+            scene.next_id = scene.next_id + 1;
+            
+            scene.spheres = [scene.spheres; sphere];
         end
         
         function draw(scene)
@@ -87,21 +104,32 @@ classdef Scene < handle
             % =============================================================
             % Scene Plane [...; tl tr br bl id; ...] (Nx[4*3+1])
             % =============================================================
-            if ~isempty(scene.planes)
-                for i = 1:size(scene.planes,1)
-                    % Get plane vertices
-                    vert = scene.planes(i, 1:12);
-                    
-                    % reshape to match format of [tl; tr; br; bl]
-                    vert = reshape(vert, 3, 4)';
-                    
-                    % Get plane id
-                    id = scene.planes(i, 5);
-                    
-                    Scene.drawPlane(t, R, vert, id);
-                end
+            for i = 1:size(scene.planes,1)
+                % Get plane vertices
+                vert = scene.planes(i, 1:12);
+
+                % reshape to match format of [tl; tr; br; bl]
+                vert = reshape(vert, 3, 4)';
+
+                % Get plane id
+                id = scene.planes(i, 5);
+
+                Scene.drawPlane(t, R, vert, id);
             end
             % -------------------------------------------------------------
+            
+            % =============================================================
+            % Scene Sphere [...; center radius id; ...] (Nx5)
+            % =============================================================
+            for i = 1:size(scene.spheres,1)
+                
+                % Break out center/radius
+                center = scene.spheres(i,1:3);
+                radius = scene.spheres(i,4);
+                id = scene.spheres(i,5);
+                
+                Scene.drawSphere(t, R, center, radius, id);
+            end
         end
     end
     
@@ -145,6 +173,33 @@ classdef Scene < handle
                     'FaceColor','flat','FaceAlpha',0.05);
 
         %     printIDs(x,y,z,id)
+        end
+        
+        function drawSphere(O, R, center, radius, id)
+            %DRAWSPHERE Draw a sphere
+            
+            % Rotate and then translate so that the pts that were expressed in the
+            % local scene coordinate frame are now expressed in the frame that we
+            % are drawing in.
+            center = R'*center' + O;
+            
+            if length(center) == 3
+                % Generate a sphere in the scene coordinate frame
+                [X,Y,Z] = sphere;
+
+                % Shift and scale so that sphere is parameterized by center and
+                % radius given by user
+                X = X*radius + center(1);
+                Y = Y*radius + center(2);
+                Z = Z*radius + center(3);
+
+                surf(X,Y,Z, 'EdgeColor','interp');
+            else
+                th = 0:pi/50:2*pi;
+                xunit = radius * cos(th) + center(1);
+                yunit = radius * sin(th) + center(2);
+                plot3(xunit, yunit, zeros(length(xunit),1));               
+            end
         end
     end
     

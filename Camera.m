@@ -15,6 +15,7 @@ classdef Camera < handle
     properties (Access = private)
         points_px
         planes_px
+        spheres_px
     end
     
     methods
@@ -84,7 +85,7 @@ classdef Camera < handle
             P = cam.K*R*[eye(3) -t];
             
             % How many points are there?
-            N = length(points);
+            N = size(points, 1);
             
             % Get homogeneous points
             pts = [points ones(N,1)];
@@ -132,29 +133,52 @@ classdef Camera < handle
             % =============================================================
             % Scene Plane [...; tl tr br bl id; ...] (Nx[4*3+1])
             % =============================================================
-            if ~isempty(scene.planes)
-                for i = 1:size(scene.planes,1)
-                    % Get plane vertices
-                    vert = scene.planes(i, 1:12);
-                    
-                    % reshape to match format of [tl; tr; br; bl]
-                    vert = reshape(vert, 3, 4)';
-                    
-                    % Project 3D world points onto pixel plane
-                    [U, V] = cam.project(vert, R, t);
-                    
-                    % Reshape to fit plane format (row of [tl tr br bl])
-                    pixels = reshape([U V]', 1, 8);
-                    
-                    % Augment pixels with ids and save
-                    cam.planes_px = [pixels scene.planes(i,5)];
-                end
+            for i = 1:size(scene.planes,1)
+                % Get plane vertices
+                vert = scene.planes(i, 1:12);
+
+                % reshape to match format of [tl; tr; br; bl]
+                vert = reshape(vert, 3, 4)';
+
+                % Project 3D world points onto pixel plane
+                [U, V] = cam.project(vert, R, t);
+
+                % Reshape to fit plane format (row of [tl tr br bl])
+                pixels = reshape([U V]', 1, 8);
+
+                % Augment pixels with ids and save
+                cam.planes_px = [cam.planes_px; pixels scene.planes(i,5)];
+            end
+            % -------------------------------------------------------------
+            
+            % =============================================================
+            % Scene Sphere [...; center radius id; ...] (Nx5)
+            % =============================================================
+            for i = 1:size(scene.spheres,1)
+                
+                % Break out center/radius
+                center = scene.spheres(i,1:3);
+                radius = scene.spheres(i,4);
+                id = scene.spheres(i,5);
+                
+                % Project the center point to pixels
+                [U, V] = cam.project(center, R, t);
+                
+                % Project the radius to pixels
+                radius = radius*cam.K(1,1)/center(3);
+                
+                pixels = [U V radius id];
+                
+                % Augment pixels with ids and save
+                cam.spheres_px = [cam.spheres_px; pixels];
             end
             % -------------------------------------------------------------
         end
         
         function showImage(cam)
             %SHOWIMAGE
+            
+            hold on;
             
             % Since we are simply plotting pixels that have already been
             % projected from the 3D world, we can set no translation and
@@ -186,6 +210,20 @@ classdef Camera < handle
                 vert = reshape(vert, 2, 4)';
                 
                 Scene.drawPlane(t, R, vert);
+            end
+            % -------------------------------------------------------------
+            
+            % =============================================================
+            % Spheres
+            % =============================================================
+            for i = 1:size(cam.spheres_px, 1)
+                
+                % Break out center/radius
+                center = cam.spheres_px(i,1:2);
+                radius = cam.spheres_px(i,3);
+                id = cam.spheres_px(i,4);
+                
+                Scene.drawSphere(t, R, center, radius, id);
             end
             % -------------------------------------------------------------
             

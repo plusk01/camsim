@@ -19,6 +19,8 @@ scene.generatePoints(30, [10 10 10]);
 s = 0.3;
 scene.addPlane([-3 -4 10]*s, [5 -4 10]*s, [4 0 0]*s, [-2 0 0]*s);
 
+scene.addSphere([-1 2 10], 1);
+
 % Register the scene with the camera object
 cam.viewScene(scene);
 
