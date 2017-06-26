@@ -6,10 +6,11 @@ classdef Scene < handle
     properties
         points = []     % [...; x y z id; ...] (Nx4)
         planes = []     % [...; tl tr br bl id; ...] (Nx[4*3+1])
+        
+        F           % elements in the scene are defined w.r.t this frame
     end
     
     properties (Access = private)
-        F           % elements in the scene are defined w.r.t this frame
         offset
         next_id=1   % next value of id to store with a scene element
     end
@@ -20,13 +21,16 @@ classdef Scene < handle
            scene.offset = offset;
         end
         
-        function generatePoints(scene, N)
+        function generatePoints(scene, N, spread)
             %GENERATEPOINTS Generate random 3D points for the scene
-            % N     Number of points in the scene
-                      
-            X = (rand(N,1)-0.5)*10 + scene.offset(1);
-            Y = (rand(N,1)-0.5)*10 + scene.offset(2);
-            Z = (rand(N,1)-0.5)*20 + scene.offset(3);
+            % N         Number of points in the scene
+            % spread    How much of a spread in [X Y Z]
+
+            if nargin < 3, spread = [1 1 1]; end
+            
+            X = (rand(N,1)-0.5)*spread(1) + scene.offset(1);
+            Y = (rand(N,1)-0.5)*spread(2) + scene.offset(2);
+            Z = (rand(N,1)-0.5)*spread(3) + scene.offset(3);
             
             % Augment with each point's id
             pts = [X Y Z (scene.next_id:N)'];
@@ -76,7 +80,7 @@ classdef Scene < handle
                 % The fourth column is just the id
                 pts = scene.points(:, 1:3);
 
-                drawPoints(t, R, pts, scene.points(:,4));
+                Scene.drawPoints(t, R, pts, scene.points(:,4));
             end
             % -------------------------------------------------------------
             
@@ -94,49 +98,56 @@ classdef Scene < handle
                     % Get plane id
                     id = scene.planes(i, 5);
                     
-                    drawPlane(t, R, vert, id);
+                    Scene.drawPlane(t, R, vert, id);
                 end
             end
             % -------------------------------------------------------------
         end
     end
     
-end
+    methods(Static)
+        function drawPoints(O, R, pts, ids)
+        %DRAWPOINTS Draws a set of points
 
-function drawPoints(O, R, pts, ids)
-%DRAWPOINTS Draws a set of points
+            % Rotate and then translate so that the pts that were expressed in the
+            % local scene coordinate frame are now expressed in the frame that we
+            % are drawing in.
+            pts = (R'*pts')' + repmat(O',length(pts),1);
 
-    % Rotate and then translate so that the pts that were expressed in the
-    % local scene coordinate frame are now expressed in the frame that we
-    % are drawing in.
-    pts = (R'*pts')' + repmat(O',length(pts),1);
+            X = pts(:,1);
+            Y = pts(:,2);
+            
+            if size(pts,2) == 3
+                Z = pts(:,3);
+            else
+                Z = zeros(length(pts),1);
+            end
 
-    X = pts(:,1);
-    Y = pts(:,2);
-    Z = pts(:,3);
+            scatter3(X,Y,Z,10);
+            adjustAxis(X,Y,Z);
 
-    scatter3(X,Y,Z,10);
-    adjustAxis(X,Y,Z);
+            printIDs(X,Y,Z,ids);
+        end
 
-    printIDs(X,Y,Z,ids);
-end
+        function drawPlane(O, R, vert, id)
+        %DRAWPLANE Draws one plane
 
-function drawPlane(O, R, vert, id)
-%DRAWPLANE Draws one plane
+            % Rotate and then translate so that the pts that were expressed in the
+            % local scene coordinate frame are now expressed in the frame that we
+            % are drawing in.
+            vert = (R'*vert')' + repmat(O',4,1);
 
-    % Rotate and then translate so that the pts that were expressed in the
-    % local scene coordinate frame are now expressed in the frame that we
-    % are drawing in.
-    vert = (R'*vert')' + repmat(O',4,1);
+            Faces = [ 4 3 2 1 ];
 
-    Faces = [ 4 3 2 1 ];
+            colors = [1 0 0];
 
-    colors = [1 0 0];
+            patch('Vertices', vert, 'Faces', Faces,'FaceVertexCData',colors,...
+                    'FaceColor','flat','FaceAlpha',0.05);
 
-    patch('Vertices', vert, 'Faces', Faces,'FaceVertexCData',colors,...
-            'FaceColor','flat','FaceAlpha',0.05);
-        
-%     printIDs(x,y,z,id)
+        %     printIDs(x,y,z,id)
+        end
+    end
+    
 end
 
 function printIDs(X,Y,Z,ids)

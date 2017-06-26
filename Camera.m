@@ -13,7 +13,8 @@ classdef Camera < handle
     end
     
     properties (Access = private)
-        points
+        points_px
+        planes_px
     end
     
     methods
@@ -76,40 +77,17 @@ classdef Camera < handle
             drawFOV(O, R, cam.afov_x, cam.afov_y, cam.F.k+1);
         end
         
-        function viewScene(cam, scene)
-            %VIEWSCENE Project scene elements onto pixels
+        function [U, V] = project(cam, points, R, t)
+            %PROJECT Project 3D points onto pixels
             
-            cam.scene = scene;
-            
-            % =============================================================
-            % Points
-            % =============================================================
-            
-            pts = zeros(length(scene.points), 4);
-            for i=1:length(scene.points)
-                pts(i,1:3) = scene.points(i).pt;
-                pts(i,4) = scene.points(i).id;
-            end
-            
-            cam.points = pts(:, 1:3);
-            
-            % -------------------------------------------------------------
-        end
-        
-        function showImage(cam)
-            %SHOWIMAGE
-            
-            % get 3D scene points
-            % Rotate and translate into camera frame
-            % project onto sensor/pixel plane
-
-            P = cam.K*cam.F.R*[eye(3) -cam.F.O];
+            % Create the projection matrix: K*[R|t]
+            P = cam.K*R*[eye(3) -t];
             
             % How many points are there?
-            N = length(cam.points);
+            N = length(points);
             
             % Get homogeneous points
-            pts = [cam.points ones(N,1)];
+            pts = [points ones(N,1)];
             
             % Project onto homogeneous pixels
             hpixels = (P*pts')';
@@ -117,41 +95,104 @@ classdef Camera < handle
             % Normalize pixels -- [u v 1]
             hpixels = hpixels./hpixels(:,3);
             
+            % Extract the nonhomogeneous pixels
             U = hpixels(:,1);
             V = hpixels(:,2);
+        end
+        
+        function viewScene(cam, scene)
+            %VIEWSCENE Project scene elements onto pixels
             
-            title('Camera Image');
-            scatter(U, V, 10);
-            axis([0 cam.wpx 0 cam.hpx]);
-            set(gca,'YDir','Reverse'); set(gca, 'XAxisLocation', 'top');
-            xlabel('x (pixels)'); ylabel('y (pixels)');
+            cam.scene = scene;
             
-            a = (1:N)'; b = num2str(a); c = cellstr(b);
-            % displacement so the text does not overlay the data points
-            dx = 8; dy = 0;
-            text(U+dx, V+dy, c, 'FontSize', 8);
+            % Get the origin vector and orientation matrix of
+            % the camera frame defined in the scene frame.
+            % Scene elements are defined in the scene frame, so this
+            % represents the extrinsic camera parameters needed in the
+            % projection matrix.
+            [t,R] = cam.F.express(scene.F);
+            
+            % =============================================================
+            % Scene Points [...; x y z id; ...] (Nx4)
+            % =============================================================
+            if ~isempty(scene.points)
+                
+                % The fourth column is just the id
+                pts = scene.points(:, 1:3);
+
+                % Project 3D world points onto pixel plane
+                [U, V] = cam.project(pts, R, t);
+                
+                % Augment pixels with ids and save to cam.points_px
+                cam.points_px = [U V scene.points(:,4)];
+                
+            end
+            % -------------------------------------------------------------
+            
+            % =============================================================
+            % Scene Plane [...; tl tr br bl id; ...] (Nx[4*3+1])
+            % =============================================================
+            if ~isempty(scene.planes)
+                for i = 1:size(scene.planes,1)
+                    % Get plane vertices
+                    vert = scene.planes(i, 1:12);
+                    
+                    % reshape to match format of [tl; tr; br; bl]
+                    vert = reshape(vert, 3, 4)';
+                    
+                    % Project 3D world points onto pixel plane
+                    [U, V] = cam.project(vert, R, t);
+                    
+                    % Reshape to fit plane format (row of [tl tr br bl])
+                    pixels = reshape([U V]', 1, 8);
+                    
+                    % Augment pixels with ids and save
+                    cam.planes_px = [pixels scene.planes(i,5)];
+                end
+            end
+            % -------------------------------------------------------------
+        end
+        
+        function showImage(cam)
+            %SHOWIMAGE
+            
+            % Since we are simply plotting pixels that have already been
+            % projected from the 3D world, we can set no translation and
+            % identity orientation.
+            t = zeros(2,1);
+            R = eye(2);
+           
+            % =============================================================
+            % Points
+            % =============================================================
+            if ~isempty(cam.points_px)
+                U = cam.points_px(:,1);
+                V = cam.points_px(:,2);
+                ids = cam.points_px(:,3);
+               
+                Scene.drawPoints(t, R, [U V], ids);
+            end
+            % -------------------------------------------------------------
             
             % =============================================================
             % Planes
             % =============================================================
-            
-            for i=1:length(cam.scene.planes)
-                
-                % Create homogeneous 3D plane points
-                pts = [cam.scene.planes(i).pts ones(4,1)];
-                
-                % Project onto homogeneous pixels
-                hpixels = (P*pts')';
+            for i=1:size(cam.planes_px, 1)
 
-                % Normalize pixels -- [u v 1]
-                hpixels = hpixels./hpixels(:,3);
+                % Get plane vertices
+                vert = cam.planes_px(i, 1:8);
 
-                U = hpixels(:,1);
-                V = hpixels(:,2);
+                % reshape to match format of [tl; tr; br; bl]
+                vert = reshape(vert, 2, 4)';
                 
-                cam.scene.planes(i).draw([U V]);
-                
+                Scene.drawPlane(t, R, vert);
             end
+            % -------------------------------------------------------------
+            
+            title(sprintf('Camera Image: %s', cam.F.name));
+            axis([0 cam.wpx 0 cam.hpx]);
+            set(gca,'YDir','Reverse'); set(gca, 'XAxisLocation', 'top');
+            xlabel('x (pixels)'); ylabel('y (pixels)'); grid off;
         end
     end
     
