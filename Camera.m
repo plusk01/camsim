@@ -232,6 +232,40 @@ classdef Camera < handle
             set(gca,'YDir','Reverse'); set(gca, 'XAxisLocation', 'top');
             xlabel('x (pixels)'); ylabel('y (pixels)'); grid off;
         end
+        
+        function showNIP(cam)
+            %SHOWNIP Show normalized image plane
+            
+            hold on;
+            
+            % No translation/rotation neccessary
+            t = zeros(2,1);
+            R = eye(2);
+           
+            % =============================================================
+            % Points
+            % =============================================================
+            if ~isempty(cam.points_px)
+                U = cam.points_px(:,1);
+                V = cam.points_px(:,2);
+                ids = cam.points_px(:,3);
+                
+                pixels = [U V ones(length(U), 1)];
+                
+                nips = (cam.K\pixels')';
+               
+                Scene.drawPoints(t, R, [nips(:,1) nips(:,2)], ids);
+            end
+            % -------------------------------------------------------------
+            
+            % Find maximum normalized image coordinate
+            nips = (cam.K\[cam.wpx cam.hpx 1]')';
+            
+            title(sprintf('NIP: %s', cam.F.name));
+            axis([-nips(1) nips(1) -nips(2) nips(2)]);
+            set(gca,'YDir','Reverse'); set(gca, 'XAxisLocation', 'top');
+            xlabel('x (normalized)'); ylabel('y (normalized)'); grid off;
+        end
     end
     
 end

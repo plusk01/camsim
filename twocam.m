@@ -43,3 +43,5 @@ cam2.draw();
 
 figure(2), clf; cam1.showImage();
 figure(3), clf; cam2.showImage();
+
+figure(4), clf; cam1.showNIP();

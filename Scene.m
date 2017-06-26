@@ -210,7 +210,14 @@ function printIDs(X,Y,Z,ids)
 
     % Plot the IDs next to the point
     b = num2str(ids); c = cellstr(b);
+    
     % displacement so the text does not overlay the data points
-    dx = 0.1; dy = 0.1; dz = 0.1;
+    
+    % Order of magnitude of each dimension
+    ox = 10^floor(log10(max(X)));
+    oy = 10^floor(log10(max(Y)));
+    oz = 10^floor(log10(max(Z)));
+    dx = ox/100; dy = oy/100; dz = oz/100;
+    
     text(X+dx, Y+dy, Z+dz, c, 'FontSize', 6);
 end
